@@ -12,7 +12,8 @@ const int indicatorDigits[indicatorSize] = {2, 3, 4, 5, 6, 7, 8};
 
 const unsigned long wateringTime = HOUR; // 1 hour by milliseconds
 
-bool watering = false;
+bool watering1 = false;
+bool watering2 = false;
 unsigned long t0;
 const int HUMIDITY_TO_WATERING = 952;
 int dryCounter = 0;
@@ -51,13 +52,19 @@ void loop() {
 
   
 
-  if(watering){
+  if(watering1){
     if(millis() - t0 >= wateringTime){
-     closeValves();
+     closeValve1();
+     openValve2();
+     t0 = millis();
+    }
+  }else if(watering2){
+    if(millis() - t0 >= wateringTime){
+      closeValve2();
     }
   }else{
     if(dryCounter == DRYCOUNTERLIMIT){
-      openValves();
+      openValve1();
       t0 = millis();
     }
   }
@@ -68,32 +75,34 @@ void loop() {
   delay(1000);
 }
 
-void openValves(){
-  openValve1();
-  openValve2();
-  watering = true;
-}
+//void openValves(){
+//  openValve1();
+//  openValve2();
+//}
 
 void closeValves(){
   closeValve1();
   closeValve2();
-  watering = false;
 }
 
 void openValve1(){
   digitalWrite(valve1, LOW);
+  watering1 = true;
 }
 
 void closeValve1(){
   digitalWrite(valve1, HIGH);
+  watering1 = false;
 }
 
 void openValve2(){
   digitalWrite(valve2, LOW);
+  watering2 = true;
 }
 
 void closeValve2(){
   digitalWrite(valve2, HIGH);
+  watering2 = false;
 }
 
 void showHumidityValue(int x){
