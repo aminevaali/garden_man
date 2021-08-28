@@ -10,7 +10,7 @@ const int dirtHumidityPin = A1;
 const int indicatorSize = 7;
 const int indicatorDigits[indicatorSize] = {2, 3, 4, 5, 6, 7, 8};
 
-const unsigned long wateringTime = HOUR; // 1 hour by milliseconds
+const unsigned long wateringTime = 45UL * MINUTE; // 1 hour by milliseconds
 
 bool watering1 = false;
 bool watering2 = false;
