@@ -6,21 +6,20 @@
 #define MINUTE 60UL*SECOND
 #define HOUR 60UL*MINUTE
 
-const int valve1 = 5;
-const int valve2 = 6;
+const short valve1 = 6;
+const short valve2 = 5;
 const int dirtHumidityPin = A1;
 
-const int indicatorSize = 7;
-const int indicatorDigits[indicatorSize] = {7, 8, 9, 10, 11, 12, 13};
-
-const unsigned long wateringTime = 45UL * MINUTE; // 1 hour by milliseconds
+const unsigned long wateringTime = 30UL * MINUTE; // 0.5 hour by milliseconds
 
 bool watering1 = false;
 bool watering2 = false;
-unsigned long t0;
+bool chainValves = true;
+bool suspend = false; // this variable is used to suspend automatic watering
+unsigned long t1 = 0, t2 = 0;
 const int HUMIDITY_TO_WATERING = 952;
-int dryCounter = 0;
-const int DRYCOUNTERLIMIT = 7;
+unsigned short dryCounter = 0;
+const unsigned short DRYCOUNTERLIMIT = 7;
 
 void openValve1();
 void closeValve1();
@@ -35,12 +34,12 @@ SoftwareSerial mySerial(3,2);
 const int gsmResetPin = 4;
 
 
-const int ALLOWED_NUM_SIZE = 1;
-String allowedNumbers[ALLOWED_NUM_SIZE] = {"9027732097"};
+const int ALLOWED_NUM_SIZE = 3;
+String allowedNumbers[ALLOWED_NUM_SIZE] = {"+989027732097", "+989229205534", "+989132227550"};
 
 
 String numcheck = "\"+98";
-int numPos = 0;
+unsigned short numPos = 0;
 String lastNumber = "";
 bool numflag = false;
 
@@ -55,7 +54,7 @@ void updateNumber(char ch){
     if(numPos == numcheck.length()){
       numflag = true;
       numPos = 0;
-      lastNumber = "";
+      lastNumber = "+98";
     }
   }else{ // number started
     if(ch != '"'){
@@ -79,68 +78,87 @@ bool checkLastNumber(){
 class Command{
 public:
   String cmd;
-  int pos = 0;
+  unsigned short pos = 0;
+
+  Command(String str){
+    cmd = str;
+  }
+
+  Command(){
+    
+  }
 };
 
-Command commands[5]; 
-void initialCommands(){
-  commands[0] = Command();
-  commands[0].cmd = "gman_status";
-  
-  commands[1] = Command();
-  commands[1].cmd = "gman_help";
-  
-  commands[2] = Command();
-  commands[2].cmd = "gman_callme";
 
-  commands[3] = Command();
-  commands[3].cmd = "gman_ov1";
-
-  commands[4] = Command();
-  commands[4].cmd = "gman_ov2";
-
-  commands[5] = Command();
-  commands[5].cmd = "gman_cv1";
-
-  commands[6] = Command();
-  commands[6].cmd = "gman_cv2";
-
-  commands[7] = Command();
-  commands[7].cmd = "gman_water";
-}
+Command commands[] = {Command("gmn_stat"), Command("gmn_callme"), Command("gmn_ov1")
+    , Command("gmn_ov2"), Command("gmn_cv1"), Command("gmn_cv2"), Command("gmn_rstgsm"),
+    Command("gmn_suspend"), Command("gmn_resume"), Command("gmn_chainon"),
+    Command("gmn_chainoff"), Command("gmn_ping"), Command("gmn_help")
+    }; 
+const int COMMANDS_COUNT = sizeof(commands) / sizeof(commands[0]);
 
 void runCmd(String s){
   if(!checkLastNumber()){
-    sendSMS("A disallowed number tried to command me!", "+989027732097");
+    sendSMS("disallowed number!\n" + lastNumber, "+989229205534"); //TODO use report function instead
     return;
   }
-  Serial.print("\n\nYour command is : ");
-  Serial.println(s);
-  Serial.println("--------------------------");
 
-//todo manage all commands in this if-else statements
-  if(s.equals("gman_status")){
-    String stat = "status : ";
-    stat += "valve1: ";
-    stat += (watering1? "watering" : "not watering");
-    stat += "valve2: ";
-    stat += (watering2? "watering" : "not watering");
-    stat += "\n";
-    stat += "humidity : ";
-    int humidity = digitalRead(dirtHumidityPin) * 100 / 1023;
-    stat.concat(humidity);
-    sendSMS(stat, "+98" + lastNumber);
-    
-  }else if(s.equals("help")){
-    String help = "commands : ";
-    help += "gman_status, gman_callme, gman_ov1, gman_ov2, gman_cv1, gman_cv2, gman_water, gman_nowater";
-    sendSMS(help, "+98" + lastNumber);
-    
-  }else if(s.equals("gman_callme")){
-    
-    mySerial.println("ATD+98" + lastNumber + ";");
-    
+  Serial.print("\n\ncmd : ");
+  Serial.println(s);
+  Serial.println("----");
+  delay(500);
+
+  if(s.equals("gmn_stat")){
+    sendStatus();
+  }else if(s.equals("gmn_callme")){
+    mySerial.println("ATD" + lastNumber + ";");
+  }else if(s.equals("gmn_ov1")){
+    openValve1();
+    t1 = millis();
+    if(chainValves){
+      sendSMS("Valve1 opened\nvalves chain=yes", lastNumber);
+    }else{
+      sendSMS("Valve1 opened\nvalves chain=no", lastNumber);
+    }
+  }else if(s.equals("gmn_ov2")){
+    openValve2();
+    t2 = millis();
+    sendSMS("valve2 opened", lastNumber);
+  }else if(s.equals("gmn_cv1")){
+    closeValve1();
+    t1 = millis();
+    sendSMS("valve1 closed", lastNumber);
+  }else if(s.equals("gmn_cv2")){
+    closeValve2();
+    t2 = millis();
+    sendSMS("valve2 closed", lastNumber);
+  }else if(s.equals("gmn_rstgsm")){
+    resetGsm();
+    delay(1000);
+    sendSMS("gsm reset done", lastNumber);
+  }else if(s.equals("gmn_suspend")){
+    suspend = true;
+    sendSMS("automatic watering suspended", lastNumber);
+  }else if(s.equals("gmn_resume")){
+    suspend = false;
+    sendSMS("automatic watering enabled", lastNumber);
   }
+  else if(s.equals("gmn_chainon")){
+    chainValves = true;
+    sendSMS("Watering chain enabled", lastNumber);
+  }else if(s.equals("gmn_chainoff")){
+    chainValves = false;
+    sendSMS("Watering chain disabled", lastNumber);
+  }else if(s.equals("gmn_rstconf")){
+    chainValves = true;
+    suspend = false;
+    sendSMS("settings reset done", lastNumber);
+  }else if(s.equals("gmn_ping")){
+    sendSMS("pong", lastNumber);
+  }else if(s.equals("gmn_help")){
+    sendHelp();
+  }
+
 }
 
 void readSMS(char ch){
@@ -160,26 +178,25 @@ void readSMS(char ch){
 
 }
 
-String cmd = "";
+void resetGsm(){
+  digitalWrite(gsmResetPin, LOW);
+  delay(500);
+  digitalWrite(gsmResetPin, HIGH);
+  delay(MINUTE);
+
+  mySerial.println("AT");                 // Sends an ATTENTION command, reply should be OK
+  updateSmsSerial();
+  mySerial.println("AT+CMGF=1");          // Configuration for sending SMS
+  updateSmsSerial();
+  mySerial.println("AT+CNMI=1,2,0,0,0");  // Configuration for receiving SMS
+  updateSmsSerial();
+}
+
 void updateSmsSerial()
 {
   delay(500);
-  while (Serial.available()) 
-  {
-
-    cmd+=(char)Serial.read();
- 
-    if(cmd!=""){
-      cmd.trim();  // Remove added LF in transmit
-      if (cmd.equals("S")) {
-        sendSMS("Hello from sim800", "+989229205534");
-      }else if(cmd.equals("C")){
-        call();
-      }else {
-        mySerial.print(cmd);
-        mySerial.println("");
-      }
-    }
+  while(Serial.available()){
+  mySerial.write(Serial.read());
   }
 
   while(mySerial.available()) 
@@ -195,40 +212,99 @@ void updateSmsSerial()
 void sendSMS(String message, String number){
   mySerial.println("AT+CMGF=1");
   delay(500);
-  mySerial.println( "AT+CMGS=\"" + number + "\"\r");
+  mySerial.println( "AT+CMGS=\"" + number + "\"");
   delay(500);
   mySerial.print(message);
   delay(500);
   mySerial.write(26);
+  delay(500);
 }
 
-void call(){
-  mySerial.println("ATD+989229205534;"); //  change ZZ with country code and xxxxxxxxxxx with phone number to dial
-  updateSmsSerial();
-  delay(20000); // wait for 20 seconds...
-  mySerial.println("ATH"); //hang up
-  updateSmsSerial();
+void sendStatus(){
+
+  mySerial.println("AT+CMGF=1");
+  delay(500);
+  mySerial.println( "AT+CMGS=\"" + lastNumber + "\"");
+  delay(500);
+  
+  mySerial.print("valve1: ");
+  mySerial.print(watering1? "open" : "closed");
+  mySerial.print("(");
+  mySerial.print((millis() - t1) / 60000); // 60000 milliseconds = 1 minute
+  mySerial.println("min)");
+
+  mySerial.print("valve2: ");
+  mySerial.print(watering2? "open" : "closed");
+  mySerial.print("(");
+  mySerial.print((millis() - t2) / 60000); // 60000 milliseconds = 1 minute
+  mySerial.println("min)");
+
+  mySerial.print("humidity: ");
+  long dryness = analogRead(dirtHumidityPin) * 100UL / 1023UL;
+  mySerial.println(100 - dryness);
+
+  mySerial.print("valves chain: ");
+  mySerial.println(chainValves? "yes" : "no");
+
+  mySerial.print("suspend: ");
+  mySerial.print(suspend? "yes" : "no");
+  
+  delay(500);
+  mySerial.write(26);
+  delay(500);
+    
+}
+
+void sendHelp(){
+  mySerial.println("AT+CMGF=1");
+  delay(500);
+  mySerial.println( "AT+CMGS=\"" + lastNumber + "\"");
+  delay(500);
+  
+  mySerial.println("Commands:");
+  for(int i = 0; i < COMMANDS_COUNT; i++){
+    mySerial.println(commands[i].cmd);
+  }
+  
+  delay(500);
+  mySerial.write(26);
+  delay(500);
+}
+
+//void report(String message){
+//  for(int i = 0; i < REPORTING_NUM_SIZE; i++){
+//    sendSMS(message, reportingNumbers[i]);
+//    delay(6000);
+//  }
+//
+//}
+
+void call(String number){
+  mySerial.println("ATD" + number + ";");
+//  delay(20000); // wait for 20 seconds...
+//  mySerial.println("ATH"); //hang up
 }
 
 
 
 void setup() {
+   Serial.begin(9600);
+
+
+// ---------------------watering setup---------------------------
   pinMode(valve1, OUTPUT);
   pinMode(valve2, OUTPUT);
   pinMode(dirtHumidityPin, INPUT);
-  for(int i = 0; i < indicatorSize; i++){
-    pinMode(indicatorDigits[i], OUTPUT);
-  }
+  
   closeValves();
   
-  Serial.begin(9600);
-
+ 
 
 // ---------------------sms setup-------------------------------
-  initialCommands();
   pinMode(gsmResetPin, OUTPUT);
   digitalWrite(gsmResetPin, HIGH);
 
+  delay(MINUTE); // delay to ensure gsm is ready
   mySerial.begin(9600);
   Serial.println("Initializing...");
   delay(1000);
@@ -239,10 +315,15 @@ void setup() {
   updateSmsSerial();
   mySerial.println("AT+CNMI=1,2,0,0,0");  // Configuration for receiving SMS
   updateSmsSerial();
-  
+  delay(2000);
+  sendSMS("gman started working...", "+989229205534"); //TODO use report function instead
+  delay(1000);
 }
 
 void loop() {
+  updateSmsSerial();
+  
+  
   int humidity = analogRead(dirtHumidityPin);
   if(humidity >= HUMIDITY_TO_WATERING){
     if(dryCounter < DRYCOUNTERLIMIT){
@@ -253,35 +334,37 @@ void loop() {
   }
 
   
-
   if(watering1){
-    if(millis() - t0 >= wateringTime){
+    if(millis() - t1 >= wateringTime){
      closeValve1();
-     openValve2();
-     t0 = millis();
+     t1 = millis();
+     
+     if(chainValves == true){
+       openValve2();
+       t2 = millis();
+       sendSMS("valve2 is opened after valve1 because chain is on", "+989229205534"); //TODO use report function instead
+       delay(5000);
+     }
+
+     if(humidity >= HUMIDITY_TO_WATERING){
+        suspend = true;
+        sendSMS("sensor error\nautomatic watering suspended", "+989229205534");
+     }
+     
     }
   }else if(watering2){
-    if(millis() - t0 >= wateringTime){
+    if(millis() - t2 >= wateringTime){
       closeValve2();
+      t2 = millis();
     }
   }else{
-    if(dryCounter == DRYCOUNTERLIMIT){
+    if(!suspend && dryCounter == DRYCOUNTERLIMIT){
       openValve1();
-      t0 = millis();
+      t1 = millis();
+      sendSMS("Valve1 is opened automatically", "+989229205534"); //TODO use report function instead
     }
   }
-
-//  Serial.println(hum/idity);//
-  humidity /= 8;
-  showHumidityValue(humidity);
-
-  updateSmsSerial();
 }
-
-//void openValves(){
-//  openValve1();
-//  openValve2();
-//}
 
 void closeValves(){
   closeValve1();
@@ -306,20 +389,4 @@ void openValve2(){
 void closeValve2(){
   digitalWrite(valve2, HIGH);
   watering2 = false;
-}
-
-void showHumidityValue(int x){
-  int p = 0;
-  while(x != 0){
-    int d = x % 2;
-    digitalWrite(indicatorDigits[p], d);
-    p++;
-    x /= 2;
-  }
-
-  if(p < indicatorSize){
-    for(; p < indicatorSize; p++){
-      digitalWrite(indicatorDigits[p], LOW);
-    }
-  }
 }
