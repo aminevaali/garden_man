@@ -99,7 +99,7 @@ const int COMMANDS_COUNT = sizeof(commands) / sizeof(commands[0]);
 
 void runCmd(String s){
   if(!checkLastNumber()){
-    sendSMS("disallowed number!\n" + lastNumber, "+989229205534"); //TODO use report function instead
+    sendSMS("disallowed number!\n" + lastNumber, "+989027732"); //TODO use report function instead
     return;
   }
 
@@ -316,7 +316,7 @@ void setup() {
   mySerial.println("AT+CNMI=1,2,0,0,0");  // Configuration for receiving SMS
   updateSmsSerial();
   delay(2000);
-  sendSMS("gman started working...", "+989229205534"); //TODO use report function instead
+  sendSMS("gman started working...", "+989027732097"); //TODO use report function instead
   delay(1000);
 }
 
@@ -342,13 +342,13 @@ void loop() {
      if(chainValves == true){
        openValve2();
        t2 = millis();
-       sendSMS("valve2 is opened after valve1 because chain is on", "+989229205534"); //TODO use report function instead
+       sendSMS("valve2 is opened after valve1 because chain is on", "+989027732097"); //TODO use report function instead
        delay(5000);
      }
 
      if(humidity >= HUMIDITY_TO_WATERING){
         suspend = true;
-        sendSMS("sensor error\nautomatic watering suspended", "+989229205534");
+        sendSMS("sensor error\nautomatic watering suspended", "+989027732097");
      }
      
     }
@@ -361,7 +361,7 @@ void loop() {
     if(!suspend && dryCounter == DRYCOUNTERLIMIT){
       openValve1();
       t1 = millis();
-      sendSMS("Valve1 is opened automatically", "+989229205534"); //TODO use report function instead
+      sendSMS("Valve1 was opened automatically", "+989027732097"); //TODO use report function instead
     }
   }
 }
