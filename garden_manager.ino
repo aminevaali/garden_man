@@ -17,7 +17,7 @@ bool watering2 = false;
 bool chainValves = true;
 bool suspend = false; // this variable is used to suspend automatic watering
 unsigned long t1 = 0, t2 = 0;
-const int HUMIDITY_TO_WATERING = 952;
+const int HUMIDITY_TO_WATERING = 819; // 80%
 unsigned short dryCounter = 0;
 const unsigned short DRYCOUNTERLIMIT = 7;
 
