@@ -10,14 +10,15 @@ const short valve1 = 6;
 const short valve2 = 5;
 const int dirtHumidityPin = A1;
 
-const unsigned long wateringTime = 30UL * MINUTE; // 0.5 hour by milliseconds
+const unsigned long wateringTime1 = 30UL * MINUTE; // 0.5 hour by milliseconds
+const unsigned long wateringTime2 = 40UL * MINUTE;
 
 bool watering1 = false;
 bool watering2 = false;
 bool chainValves = true;
 bool suspend = false; // this variable is used to suspend automatic watering
 unsigned long t1 = 0, t2 = 0;
-const int HUMIDITY_TO_WATERING = 819; // 80% dryness = 20% humidity
+const int HUMIDITY_TO_WATERING = 768; // 750% dryness = 20% humidity
 unsigned short dryCounter = 0;
 const unsigned short DRYCOUNTERLIMIT = 7;
 
@@ -335,7 +336,7 @@ void loop() {
 
   
   if(watering1){
-    if(millis() - t1 >= wateringTime){
+    if(millis() - t1 >= wateringTime1){
      closeValve1();
      t1 = millis();
      
@@ -353,7 +354,7 @@ void loop() {
      
     }
   }else if(watering2){
-    if(millis() - t2 >= wateringTime){
+    if(millis() - t2 >= wateringTime2){
       closeValve2();
       t2 = millis();
     }
